@@ -2,7 +2,7 @@ name: Saatlik coin taramasi
 on:
   workflow_dispatch:
   schedule:
-    - cron: '7 * * * *'
+    - cron: '*/5 * * * *'
 permissions:
   contents: read
 concurrency:
