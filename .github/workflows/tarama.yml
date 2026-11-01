@@ -1,0 +1,44 @@
+name: Saatlik coin taramasi
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '7 * * * *'
+permissions:
+  contents: read
+concurrency:
+  group: coin-scanner
+  cancel-in-progress: false
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache/restore@v4
+        with:
+          path: telegram-state.json
+          key: telegram-state-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: telegram-state-
+      - name: Piyasa taramasi
+        shell: pwsh
+        run: ./tara.ps1
+      - name: Telegram bildirimi
+        shell: pwsh
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_TEST: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
+        run: ./telegram.ps1
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: telegram-state.json
+          key: telegram-state-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Tarama ozeti
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path son-durum.json) {
+            $r = Get-Content son-durum.json -Raw | ConvertFrom-Json
+            "Durum: $($r.Durum) | Parite: $($r.Basarili) | Aday: $(@($r.Adaylar).Count)" >> $env:GITHUB_STEP_SUMMARY
+          }
