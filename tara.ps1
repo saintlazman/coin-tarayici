@@ -26,16 +26,18 @@ try {
     $stamp = [DateTimeOffset]::FromUnixTimeMilliseconds($server).ToOffset([TimeSpan]::FromHours(3)).ToString('yyyy-MM-dd HH:mm:ss zzz')
     $exchange = Api 'exchangeInfo'
     $allowed = @{}
+    $watchlist = @('ETHUSDT','ENAUSDT','UNIUSDT','ONDOUSDT','AAVEUSDT','BTCUSDT','TAOUSDT','LDOUSDT','ETHFIUSDT','PEPEUSDT','ASTERUSDT','SYRUPUSDT')
     $excluded = @('USDC','FDUSD','TUSD','USDP','DAI','USDD','USD1','USDE','BUSD','PAXG','XAUT','EUR','EURI','AEUR')
     foreach ($s in $exchange.symbols) {
-        if ($s.status -eq 'TRADING' -and $s.quoteAsset -eq 'USDT' -and $s.isSpotTradingAllowed -and $s.baseAsset -notin $excluded -and $s.symbol -ne 'BTCUSDT') { $allowed[$s.symbol] = $true }
+        if ($s.status -eq 'TRADING' -and $s.quoteAsset -eq 'USDT' -and $s.isSpotTradingAllowed -and $s.baseAsset -notin $excluded -and $s.symbol -in $watchlist) { $allowed[$s.symbol] = $true }
     }
     $tickers = Api 'ticker/24hr'
-    $universe = @($tickers | Where-Object { $allowed.ContainsKey($_.symbol) -and (Num $_.quoteVolume) -ge 10000000 } | Sort-Object { Num $_.quoteVolume } -Descending | Select-Object -First 60)
+    $universe = @($tickers | Where-Object { $allowed.ContainsKey($_.symbol) } | Sort-Object { Num $_.quoteVolume } -Descending | Select-Object -First 60)
     if ($universe.Count -eq 0) { throw 'Tarama evreni bos' }
     $btc = Bars 'BTCUSDT'
     $btc4 = ((Num $btc[-1][4]) / (Num $btc[-5][4]) - 1) * 100
     $rows = @(); $errors = @()
+    foreach ($symbol in $watchlist) { if ($symbol -notin @($universe.symbol)) { $errors += ($symbol + ': Spot USDT verisi bulunamadi') } }
     foreach ($ticker in $universe) {
         try {
             $b = Bars $ticker.symbol
@@ -52,7 +54,7 @@ try {
             $range = ($high / $low - 1) * 100
             $relative = $r4 - $btc4
             $signal = 'YOK'
-            if ($relative -ge 0.5 -and $vol -ge 1.5 -and $range -le 4 -and $r24 -lt 12 -and $r1 -lt 5) {
+            if ((Num $ticker.quoteVolume) -ge 10000000 -and $relative -ge 0.5 -and $vol -ge 1.5 -and $range -le 4 -and $r24 -lt 12 -and $r1 -lt 5) {
                 if ($price -gt $high) { $signal = 'KIRILMA' }
                 elseif ($price -ge $high * 0.99 -and $r1 -gt 0) { $signal = 'IZLE' }
             }
