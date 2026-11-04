@@ -14,13 +14,15 @@ function SendTelegram([string]$message) {
     } catch { throw 'Telegram mesaji gonderilemedi; bot anahtari, chat ID ve ag baglantisini kontrol edin.' }
 }
 if ($env:TELEGRAM_TEST -eq 'true') { SendTelegram 'Coin tarayici Telegram baglantisi calisiyor. Bu bir baglanti testidir.' }
+SendTelegram ("Saatlik tarama: $($report.Zaman)`nSpot: $($report.Basarili)/$($report.Hedef) | Aday: $(@($report.Adaylar).Count)`nOKX OI: $(@($report.Sonuclar | Where-Object OIDurum -eq 'TAM').Count)/$($report.Basarili) | Fonlama: $(@($report.Sonuclar | Where-Object FonlamaDurum -eq 'TAM').Count)/$($report.Basarili)")
 foreach ($c in $report.Adaylar) {
     if ($state[$c.Coin] -eq $c.Sinyal) { continue }
     $oi = if ($c.OIDurum -eq 'TAM') { "OI 1s: %$($c.OI1sYuzde); 4s: %$($c.OI4sYuzde)" } else { "OI: $($c.OIDurum)" }
     $funding = if ($c.FonlamaDurum -eq 'TAM') { "Fonlama: %$($c.FonlamaYuzde)" } else { "Fonlama: $($c.FonlamaDurum)" }
-    SendTelegram ("Deneysel aday: $($c.Coin) - $($c.Sinyal)`nTarama: $($report.Zaman)`nFiyat: $($c.Fiyat)`nBTC farki (4s): $($c.BTCFarki4s) puan`nHacim: $($c.HacimKati) kat`n$oi`n$funding`nBasari orani henuz olculmedi.")
+    SendTelegram ("Deneysel aday: $($c.Coin) - $($c.Sinyal)`nTarama: $($report.Zaman)`nFiyat: $($c.Fiyat)`nBTC farki (4s): $($c.BTCFarki4s) puan`nHacim: $($c.HacimKati) kat`nVadeli kaynak: OKX`n$oi`n$funding (yaklasan odeme icin tahmini)`nBasari orani henuz olculmedi.")
     $state[$c.Coin] = $c.Sinyal
     $state | ConvertTo-Json | Set-Content -Encoding UTF8 $path
 }
 foreach ($r in $report.Sonuclar) { $state[$r.Coin] = $r.Sinyal }
 $state | ConvertTo-Json | Set-Content -Encoding UTF8 $path
+

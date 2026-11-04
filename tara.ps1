@@ -64,7 +64,7 @@ try {
     }
     if ($rows.Count -eq 0) { throw ('Tum veri istekleri basarisiz: ' + ($errors -join '; ')) }
     $candidates = @($rows | Where-Object { $_.Sinyal -ne 'YOK' } | Sort-Object HacimKati -Descending)
-    EnrichFutures $candidates ($cutoff + 1)
+    EnrichFutures $rows ($cutoff + 1)
     $record = [ordered]@{Zaman=$stamp; Durum=$(if($errors.Count){'KISMI'}else{'TAM'}); Hedef=$universe.Count; Basarili=$rows.Count; BTCDegisim4s=$btc4; Adaylar=$candidates; Sonuclar=$rows; Hatalar=$errors}
     $json = $record | ConvertTo-Json -Depth 8
     $runName = [DateTimeOffset]::FromUnixTimeMilliseconds($server).ToString('yyyyMMdd-HHmmss')
@@ -73,7 +73,7 @@ try {
     $candidateHtml = if ($candidates.Count) { $candidates | Select-Object Coin,Sinyal,Fiyat,Getiri1s,BTCFarki4s,HacimKati,Esik | ConvertTo-Html -Fragment | Out-String } else { '<p>Bu turda kosullari karsilayan aday yok.</p>' }
     $candidateHtml += '<h2>Adaylarin vadeli piyasa verileri</h2><p>OI degisimleri miktar bazinda yuzdedir; spot kapanis saatiyle eslesir. FonlamaYuzde, API tarafindan bildirilen son orandir; yillik veya sabit 8 saatlik oran degildir. Fonlama ayri bir guncel anlik goruntudur. Bos hucre sifir demek degildir. OI tek basina long/short yonunu gostermez; spot sinyallerini elemez.</p>'
     if ($candidates.Count) {
-        $candidateHtml += ($candidates | Select-Object Coin,OI1sYuzde,OI4sYuzde,OIZaman,OIDurum,OIYorum,FonlamaYuzde,FonlamaZaman,SonrakiFonlama,FonlamaDurum,VadeliHata | ConvertTo-Html -Fragment | Out-String)
+        $candidateHtml += ($candidates | Select-Object Coin,VadeliKaynak,VadeliKontrat,OI1sYuzde,OI4sYuzde,OIZaman,OIDurum,OIYorum,FonlamaYuzde,FonlamaZaman,SonrakiFonlama,FonlamaDurum,VadeliHata | ConvertTo-Html -Fragment | Out-String)
     } else { $candidateHtml += '<p>Aday olmadigi icin vadeli sorgusu yapilmadi.</p>' }
     $allHtml = $rows | Sort-Object BTCFarki4s -Descending | Select-Object Coin,Sinyal,Fiyat,Getiri1s,Getiri4s,Getiri24s,BTCFarki4s,HacimKati,Onceki6sAralik,Esik,MumKapanis | ConvertTo-Html -Fragment | Out-String
     $errorHtml = [Net.WebUtility]::HtmlEncode(($errors -join '; '))
@@ -106,3 +106,4 @@ try {
     Write-Error $message
     exit 1
 } finally { $mutex.ReleaseMutex(); $mutex.Dispose() }
+

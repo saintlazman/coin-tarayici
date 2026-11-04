@@ -1,5 +1,7 @@
 function FuturesApi([string]$path) {
-    Invoke-RestMethod -Uri ('https://fapi.binance.com/' + $path) -TimeoutSec 15
+    $r = Invoke-RestMethod -Uri ('https://www.okx.com/api/v5/' + $path) -TimeoutSec 15
+    if ($r.code -ne '0') { throw "OKX $($r.code): $($r.msg)" }
+    return $r
 }
 function OiChanges($history, [long]$target) {
     $points = @{}
@@ -20,38 +22,39 @@ function EnrichFutures($candidates, [long]$target) {
     if (-not $candidates.Count) { return }
     $contracts = @{}; $exchangeError = $null
     try {
-        $exchange = FuturesApi 'fapi/v1/exchangeInfo'
-        foreach ($s in $exchange.symbols) {
-            if ($s.status -eq 'TRADING' -and $s.contractType -eq 'PERPETUAL' -and $s.quoteAsset -eq 'USDT') { $contracts[$s.symbol] = $true }
+        $exchange = FuturesApi 'public/instruments?instType=SWAP'
+        foreach ($s in $exchange.data) {
+            if ($s.state -eq 'live' -and $s.settleCcy -eq 'USDT' -and $s.ctType -eq 'linear') {
+                $contracts[($s.instId -replace '-USDT-SWAP$','USDT')] = $s.instId
+            }
         }
     } catch { $exchangeError = $_.Exception.Message }
     foreach ($c in $candidates) {
-        $extra = [ordered]@{OI1sYuzde=$null; OI4sYuzde=$null; OIMiktar=$null; OIZaman=$null; OIDurum='VERI_YOK'; OIYorum=''; FonlamaYuzde=$null; FonlamaZaman=$null; SonrakiFonlama=$null; FonlamaDurum='VERI_YOK'; VadeliHata=''}
+        $extra = [ordered]@{VadeliKaynak='OKX'; VadeliKontrat=$null; OI1sYuzde=$null; OI4sYuzde=$null; OIMiktar=$null; OIZaman=$null; OIDurum='VERI_YOK'; OIYorum=''; FonlamaYuzde=$null; FonlamaZaman=$null; SonrakiFonlama=$null; FonlamaDurum='VERI_YOK'; VadeliHata=''}
         $problems = @()
-        if ($exchangeError) { $problems += "Vadeli baglanti: $exchangeError" }
+        if ($exchangeError) { $problems += "OKX baglanti: $exchangeError" }
         elseif (-not $contracts.ContainsKey($c.Coin)) {
-            $extra.OIDurum = 'ESLESEN_KONTRAT_YOK'; $extra.FonlamaDurum = 'ESLESEN_KONTRAT_YOK'
+            $extra.OIDurum = 'OKX_KONTRAT_YOK'; $extra.FonlamaDurum = 'OKX_KONTRAT_YOK'
         } else {
+            $id = $contracts[$c.Coin]; $extra.VadeliKontrat = $id
             try {
-                $hist = FuturesApi "futures/data/openInterestHist?symbol=$($c.Coin)&period=1h&limit=8&endTime=$target"
+                $r = FuturesApi "rubik/stat/contracts/open-interest-history?instId=$id&period=1H&limit=10&end=$($target+1)"
+                $hist = @($r.data | ForEach-Object { [pscustomobject]@{timestamp=[long]$_[0]; sumOpenInterest=$_[2]} })
                 $change = OiChanges $hist $target
                 foreach($p in $change.PSObject.Properties){ $extra[$p.Name] = $p.Value }
                 $extra.OIDurum = 'TAM'
-                if ($c.Getiri4s -gt 0 -and $change.OI4sYuzde -gt 0) { $extra.OIYorum = 'Fiyat ve OI artiyor' }
-                elseif ($c.Getiri4s -gt 0 -and $change.OI4sYuzde -lt 0) { $extra.OIYorum = 'Fiyat artiyor; OI azaliyor' }
-                elseif ($c.Getiri4s -lt 0 -and $change.OI4sYuzde -gt 0) { $extra.OIYorum = 'Fiyat dusuyor; OI artiyor' }
-                elseif ($c.Getiri4s -lt 0 -and $change.OI4sYuzde -lt 0) { $extra.OIYorum = 'Fiyat ve OI azaliyor' }
-                else { $extra.OIYorum = 'Fiyat veya OI yatay' }
             } catch { $problems += "OI: $($_.Exception.Message)" }
             try {
-                $f = FuturesApi "fapi/v1/premiumIndex?symbol=$($c.Coin)"
+                $r = FuturesApi "public/funding-rate?instId=$id"
+                $f = @($r.data)[0]
                 $now = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-                if ($null -eq $f.lastFundingRate -or $f.symbol -ne $c.Coin -or [math]::Abs($now - [long]$f.time) -gt 300000) { throw 'Fonlama verisi eksik/eski' }
-                $extra.FonlamaYuzde = [math]::Round((Num $f.lastFundingRate) * 100, 5)
-                $extra.FonlamaZaman = [DateTimeOffset]::FromUnixTimeMilliseconds([long]$f.time).ToOffset([TimeSpan]::FromHours(3)).ToString('yyyy-MM-dd HH:mm zzz')
-                $extra.SonrakiFonlama = [DateTimeOffset]::FromUnixTimeMilliseconds([long]$f.nextFundingTime).ToOffset([TimeSpan]::FromHours(3)).ToString('yyyy-MM-dd HH:mm zzz')
+                if ([string]::IsNullOrWhiteSpace($f.fundingRate) -or $f.instId -ne $id -or [math]::Abs($now - [long]$f.ts) -gt 300000 -or [long]$f.fundingTime -le $now) { throw 'Fonlama verisi eksik/eski' }
+                $extra.FonlamaYuzde = [math]::Round((Num $f.fundingRate) * 100, 5)
+                $extra.FonlamaZaman = [DateTimeOffset]::FromUnixTimeMilliseconds([long]$f.ts).ToOffset([TimeSpan]::FromHours(3)).ToString('yyyy-MM-dd HH:mm zzz')
+                $extra.SonrakiFonlama = [DateTimeOffset]::FromUnixTimeMilliseconds([long]$f.fundingTime).ToOffset([TimeSpan]::FromHours(3)).ToString('yyyy-MM-dd HH:mm zzz')
                 $extra.FonlamaDurum = 'TAM'
             } catch { $problems += "Fonlama: $($_.Exception.Message)" }
+            Start-Sleep -Milliseconds 250
         }
         $extra.VadeliHata = $problems -join '; '
         foreach($key in $extra.Keys){ $c | Add-Member -NotePropertyName $key -NotePropertyValue $extra[$key] -Force }
