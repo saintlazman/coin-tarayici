@@ -17,18 +17,6 @@ jobs:
           path: telegram-state.json
           key: telegram-state-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: telegram-state-
-      - name: Alternatif veri erisim testi
-        shell: pwsh
-        run: |
-          $urls = @('https://api.bybit.com/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=1h&limit=6','https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT','https://www.okx.com/api/v5/public/open-interest?instType=SWAP&instId=BTC-USDT-SWAP','https://www.okx.com/api/v5/public/funding-rate?instId=BTC-USDT-SWAP')
-          foreach ($u in $urls) {
-            try {
-              $r = Invoke-WebRequest -Uri $u -TimeoutSec 15
-              "$u : HTTP $($r.StatusCode) | $($r.Content)" >> $env:GITHUB_STEP_SUMMARY
-            } catch {
-              "$u : HATA $($_.Exception.Response.StatusCode) | $($_.ErrorDetails.Message)" >> $env:GITHUB_STEP_SUMMARY
-            }
-          }
       - name: Piyasa taramasi
         shell: pwsh
         run: ./tara.ps1
@@ -50,5 +38,6 @@ jobs:
         run: |
           if (Test-Path son-durum.json) {
             $r = Get-Content son-durum.json -Raw | ConvertFrom-Json
+            $r.Sonuclar | Select-Object Coin,VadeliKaynak,OIDurum,OI1sYuzde,OI4sYuzde,FonlamaDurum,FonlamaYuzde,VadeliHata | ConvertTo-Html -Fragment | Out-String | Add-Content $env:GITHUB_STEP_SUMMARY
             "Durum: $($r.Durum) | Parite: $($r.Basarili) | Aday: $(@($r.Adaylar).Count)" >> $env:GITHUB_STEP_SUMMARY
           }
