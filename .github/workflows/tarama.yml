@@ -1,8 +1,6 @@
 name: Saatlik coin taramasi
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '7 * * * *'
 permissions:
   contents: read
 concurrency:
@@ -27,7 +25,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          TELEGRAM_TEST: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
+          TELEGRAM_TEST: 'false'
         run: ./telegram.ps1
       - uses: actions/cache/save@v4
         if: always()
