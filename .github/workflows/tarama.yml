@@ -17,17 +17,16 @@ jobs:
           path: telegram-state.json
           key: telegram-state-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: telegram-state-
-      - name: Vadeli baglanti tanilama
+      - name: Alternatif veri erisim testi
         shell: pwsh
         run: |
-          $paths = @('fapi/v1/exchangeInfo','fapi/v1/premiumIndex?symbol=BTCUSDT','futures/data/openInterestHist?symbol=BTCUSDT&period=1h&limit=5')
-          foreach ($p in $paths) {
+          $urls = @('https://api.bybit.com/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=1h&limit=6','https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT','https://www.okx.com/api/v5/public/open-interest?instType=SWAP&instId=BTC-USDT-SWAP','https://www.okx.com/api/v5/public/funding-rate?instId=BTC-USDT-SWAP')
+          foreach ($u in $urls) {
             try {
-              $r = Invoke-WebRequest -Uri ('https://fapi.binance.com/' + $p) -TimeoutSec 15
-              "Vadeli $p : HTTP $($r.StatusCode)" >> $env:GITHUB_STEP_SUMMARY
+              $r = Invoke-WebRequest -Uri $u -TimeoutSec 15
+              "$u : HTTP $($r.StatusCode) | $($r.Content)" >> $env:GITHUB_STEP_SUMMARY
             } catch {
-              $code = $_.Exception.Response.StatusCode.value__
-              "Vadeli $p : HTTP $code | $($_.ErrorDetails.Message)" >> $env:GITHUB_STEP_SUMMARY
+              "$u : HATA $($_.Exception.Response.StatusCode) | $($_.ErrorDetails.Message)" >> $env:GITHUB_STEP_SUMMARY
             }
           }
       - name: Piyasa taramasi
