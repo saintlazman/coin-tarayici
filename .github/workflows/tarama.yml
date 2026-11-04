@@ -17,6 +17,19 @@ jobs:
           path: telegram-state.json
           key: telegram-state-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: telegram-state-
+      - name: Vadeli baglanti tanilama
+        shell: pwsh
+        run: |
+          $paths = @('fapi/v1/exchangeInfo','fapi/v1/premiumIndex?symbol=BTCUSDT','futures/data/openInterestHist?symbol=BTCUSDT&period=1h&limit=5')
+          foreach ($p in $paths) {
+            try {
+              $r = Invoke-WebRequest -Uri ('https://fapi.binance.com/' + $p) -TimeoutSec 15
+              "Vadeli $p : HTTP $($r.StatusCode)" >> $env:GITHUB_STEP_SUMMARY
+            } catch {
+              $code = $_.Exception.Response.StatusCode.value__
+              "Vadeli $p : HTTP $code | $($_.ErrorDetails.Message)" >> $env:GITHUB_STEP_SUMMARY
+            }
+          }
       - name: Piyasa taramasi
         shell: pwsh
         run: ./tara.ps1
