@@ -44,7 +44,7 @@ foreach ($event in $ledger.Events) {
     foreach ($hours in @(1,4,24)) {
         $key = [string]$hours
         if ($event.Outcomes.ContainsKey($key)) { continue }
-        $endOpen = [long]([math]::Floor([double]$event.ObservedAt / 60000) * 60000) + $hours * 3600000L
+        $endOpen = [long]([math]::Floor([double]$event.ObservedAt / 60000) * 60000) + $hours * 3600000L - 60000L
         $endClose = $endOpen + 59999
         if ($now -le $endClose) { continue }
         try {
@@ -114,4 +114,5 @@ foreach ($signal in @('IZLE','KIRILMA')) {
 }
 @{UpdatedAt=$report.Zaman; StartedAt=$ledger.StartedAt; EventCount=@($ledger.Events).Count; Summary=$summary; Completed=@($completed.ToArray()); Errors=@($measurementErrors.ToArray())} | ConvertTo-Json -Depth 12 | Set-Content -Encoding utf8 (Join-Path $root 'olcum-sonuc.json')
 "Olcum kaydi: $(@($ledger.Events).Count) sinyal, $($completed.Count) yeni sonuc, $($measurementErrors.Count) veri hatasi"
+
 
