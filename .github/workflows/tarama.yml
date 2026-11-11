@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: coin-scanner
   cancel-in-progress: false
@@ -17,9 +18,35 @@ jobs:
           path: telegram-state.json
           key: telegram-state-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: telegram-state-
+      - name: Onceki olcum kaydini getir
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          artifact_id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=scanner-measurements-v1&per_page=1" --jq '.artifacts[0].id // empty')
+          if [ -n "$artifact_id" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" > measurements.zip
+            mkdir -p measurement-state
+            unzip -o measurements.zip -d measurement-state
+            test -s measurement-state/ledger.json
+          else
+            echo 'Ilk olcum calismasi: yeni kayit baslatilacak.'
+          fi
       - name: Piyasa taramasi
         shell: pwsh
         run: ./tara.ps1
+      - name: Sinyal sonuclarini olc
+        shell: pwsh
+        run: ./olcum.ps1
+      - name: Olcum kaydini kalici sakla
+        uses: actions/upload-artifact@v4
+        with:
+          name: scanner-measurements-v1
+          path: measurement-state/ledger.json
+          if-no-files-found: error
+          retention-days: 90
+          overwrite: true
       - name: Telegram bildirimi
         shell: pwsh
         env:
@@ -41,3 +68,10 @@ jobs:
             $r.Sonuclar | Select-Object Coin,VadeliKaynak,OIDurum,OI1sYuzde,OI4sYuzde,FonlamaDurum,FonlamaYuzde,VadeliHata | ConvertTo-Html -Fragment | Out-String | Add-Content $env:GITHUB_STEP_SUMMARY
             "Durum: $($r.Durum) | Parite: $($r.Basarili) | Aday: $(@($r.Adaylar).Count)" >> $env:GITHUB_STEP_SUMMARY
           }
+          if (Test-Path olcum-sonuc.json) {
+            $m = Get-Content olcum-sonuc.json -Raw | ConvertFrom-Json
+            "Olcum kaydi: $($m.EventCount) sinyal; bu tur $(@($m.Completed).Count) yeni sonuc; $(@($m.Errors).Count) olcum hatasi" >> $env:GITHUB_STEP_SUMMARY
+            $m.Summary | Select-Object Signal,Hours,Count,PositivePct,BeatBtcPct,MeanReturnPct,MeanExcessPoints | ConvertTo-Html -Fragment | Out-String | Add-Content $env:GITHUB_STEP_SUMMARY
+            $m.Errors | ForEach-Object { $_ >> $env:GITHUB_STEP_SUMMARY }
+          }
+
