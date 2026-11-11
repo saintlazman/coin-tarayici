@@ -15,14 +15,33 @@ function SendTelegram([string]$message) {
 }
 if ($env:TELEGRAM_TEST -eq 'true') { SendTelegram 'Coin tarayici Telegram baglantisi calisiyor. Bu bir baglanti testidir.' }
 SendTelegram ("Saatlik tarama: $($report.Zaman)`nSpot: $($report.Basarili)/$($report.Hedef) | Aday: $(@($report.Adaylar).Count)`nOKX OI: $(@($report.Sonuclar | Where-Object OIDurum -eq 'TAM').Count)/$($report.Basarili) | Fonlama: $(@($report.Sonuclar | Where-Object FonlamaDurum -eq 'TAM').Count)/$($report.Basarili)")
+$measurementPath = Join-Path $root 'olcum-sonuc.json'
+if (-not (Test-Path $measurementPath)) { throw 'Olcum sonucu eksik.' }
+$measurement = Get-Content $measurementPath -Raw | ConvertFrom-Json
+$statistics = @($measurement.Summary | Where-Object Count -gt 0 | ForEach-Object {
+    "$($_.Signal) $($_.Hours) saat: n=$($_.Count), pozitif %$($_.PositivePct), BTC ustu %$($_.BeatBtcPct), ort. %$($_.MeanReturnPct)"
+})
+$measurementText = if ($statistics.Count) { $statistics -join "`n" } else { "Sonuc takibindeki sinyal: $($measurement.EventCount). Yeni sinyaller 1/4/24 saat sonra degerlendirilir." }
+if ($measurement.Errors.Count) { $measurementText += "`nOlcum veri hatasi: $($measurement.Errors.Count). Eksik sonuclar sonraki turda yeniden denenir." }
+SendTelegram ("Sinyal performansi (brut)`n$measurementText")
+$resultMessage = ''
+foreach ($item in $measurement.Completed) {
+    $o = $item.Outcome
+    $line = "$($item.Coin) $($item.Signal) $($o.Hours) saat: %$($o.ReturnPct), BTC farki $($o.ExcessPoints) puan; en dusuk %$($o.WorstPct), en yuksek %$($o.BestPct)`n"
+    if (($resultMessage.Length + $line.Length) -gt 3200) { SendTelegram $resultMessage; $resultMessage = '' }
+    $resultMessage += $line
+}
+if ($resultMessage) { SendTelegram ("Yeni olcum sonuclari`n$resultMessage") }
+
 foreach ($c in $report.Adaylar) {
     if ($state[$c.Coin] -eq $c.Sinyal) { continue }
     $oi = if ($c.OIDurum -eq 'TAM') { "OI 1s: %$($c.OI1sYuzde); 4s: %$($c.OI4sYuzde)" } else { "OI: $($c.OIDurum)" }
     $funding = if ($c.FonlamaDurum -eq 'TAM') { "Fonlama: %$($c.FonlamaYuzde)" } else { "Fonlama: $($c.FonlamaDurum)" }
-    SendTelegram ("Deneysel aday: $($c.Coin) - $($c.Sinyal)`nTarama: $($report.Zaman)`nFiyat: $($c.Fiyat)`nBTC farki (4s): $($c.BTCFarki4s) puan`nHacim: $($c.HacimKati) kat`nVadeli kaynak: OKX`n$oi`n$funding (yaklasan odeme icin tahmini)`nBasari orani henuz olculmedi.")
+    SendTelegram ("Deneysel aday: $($c.Coin) - $($c.Sinyal)`nTarama: $($report.Zaman)`nFiyat: $($c.Fiyat)`nBTC farki (4s): $($c.BTCFarki4s) puan`nHacim: $($c.HacimKati) kat`nVadeli kaynak: OKX`n$oi`n$funding (yaklasan odeme icin tahmini)`nBu sinyal 1/4/24 saatlik sonuc takibine alindi. Oranlar saatlik performans mesajinda.")
     $state[$c.Coin] = $c.Sinyal
     $state | ConvertTo-Json | Set-Content -Encoding UTF8 $path
 }
 foreach ($r in $report.Sonuclar) { $state[$r.Coin] = $r.Sinyal }
 $state | ConvertTo-Json | Set-Content -Encoding UTF8 $path
+
 
