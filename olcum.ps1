@@ -100,7 +100,7 @@ if ($cutoff -gt [long]$ledger.LastCutoff) {
 }
 SaveLedger
 $summary = @()
-foreach ($signal in @('IZLE','KIRILMA')) {
+foreach ($signal in @('IZLE','KIRILMA','GORELI_GUC_DENEME')) {
     foreach ($hours in @(1,4,24)) {
         $samples = @($ledger.Events | Where-Object { $_.Signal -eq $signal -and $_.Outcomes.ContainsKey([string]$hours) } | ForEach-Object { $_.Outcomes[[string]$hours] })
         $summary += @{

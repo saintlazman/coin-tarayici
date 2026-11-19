@@ -35,9 +35,12 @@ if ($resultMessage) { SendTelegram ("Yeni olcum sonuclari`n$resultMessage") }
 
 foreach ($c in $report.Adaylar) {
     if ($state[$c.Coin] -eq $c.Sinyal) { continue }
+    $signalExplanation = if ($c.Sinyal -eq 'GORELI_GUC_DENEME') {
+        "Erken izleme denemesi: Son 3 kapanista BTC'ye gore en az 1 puan guc ve listedeki ilk 3 sira. BTC bu araliklarda dusus/yatay. Bu ozel listede 10M hacim ve sikisma kosulu aranmaz."
+    } else { 'Mevcut tepeye yaklasma/kirilma kurali.' }
     $oi = if ($c.OIDurum -eq 'TAM') { "OI 1s: %$($c.OI1sYuzde); 4s: %$($c.OI4sYuzde)" } else { "OI: $($c.OIDurum)" }
     $funding = if ($c.FonlamaDurum -eq 'TAM') { "Fonlama: %$($c.FonlamaYuzde)" } else { "Fonlama: $($c.FonlamaDurum)" }
-    SendTelegram ("Deneysel aday: $($c.Coin) - $($c.Sinyal)`nTarama: $($report.Zaman)`nFiyat: $($c.Fiyat)`nBTC farki (4s): $($c.BTCFarki4s) puan`nHacim: $($c.HacimKati) kat`nVadeli kaynak: OKX`n$oi`n$funding (yaklasan odeme icin tahmini)`nBu sinyal 1/4/24 saatlik sonuc takibine alindi. Oranlar saatlik performans mesajinda.")
+    SendTelegram ("Deneysel aday: $($c.Coin) - $($c.Sinyal)`n$signalExplanation`nTarama: $($report.Zaman)`nFiyat: $($c.Fiyat)`nBTC farki (4s): $($c.BTCFarki4s) puan`nHacim: $($c.HacimKati) kat | 24s: $([math]::Round($c.Hacim24sUSDT / 1000000,2))M USDT`nVadeli kaynak: OKX`n$oi`n$funding (yaklasan odeme icin tahmini)`nBu sinyal 1/4/24 saatlik sonuc takibine alindi. Oranlar saatlik performans mesajinda.")
     $state[$c.Coin] = $c.Sinyal
     $state | ConvertTo-Json | Set-Content -Encoding UTF8 $path
 }

@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $root = $PSScriptRoot
 . (Join-Path $root 'vadeli.ps1')
+. (Join-Path $root 'goreli.ps1')
 $data = Join-Path $root 'kayitlar'
 New-Item -ItemType Directory -Force -Path $data | Out-Null
 $mutex = New-Object Threading.Mutex($false, 'Local\OsmanCoinScannerV1')
@@ -58,11 +59,19 @@ try {
                 if ($price -gt $high) { $signal = 'KIRILMA' }
                 elseif ($price -ge $high * 0.99 -and $r1 -gt 0) { $signal = 'IZLE' }
             }
-            $rows += [pscustomobject]@{Coin=$ticker.symbol; Sinyal=$signal; Fiyat=$price; Getiri1s=[math]::Round($r1,2); Getiri4s=[math]::Round($r4,2); Getiri24s=[math]::Round($r24,2); BTCFarki4s=[math]::Round($relative,2); HacimKati=[math]::Round($vol,2); Onceki6sAralik=[math]::Round($range,2); Esik=$high; MumKapanis=$cutoff}
+            $strengthHistory = @(
+                for ($offset = 0; $offset -lt 3; $offset++) {
+                    $coinReturn = ((Num $b[$b.Count-1-$offset][4]) / (Num $b[$b.Count-5-$offset][4]) - 1) * 100
+                    $btcReturn = ((Num $btc[$btc.Count-1-$offset][4]) / (Num $btc[$btc.Count-5-$offset][4]) - 1) * 100
+                    [pscustomobject]@{Getiri4s=$coinReturn; BTCGetiri4s=$btcReturn; BTCFarki4s=($coinReturn-$btcReturn)}
+                }
+            )
+            $rows += [pscustomobject]@{Coin=$ticker.symbol; Sinyal=$signal; Fiyat=$price; Getiri1s=[math]::Round($r1,2); Getiri4s=[math]::Round($r4,2); Getiri24s=[math]::Round($r24,2); BTCFarki4s=[math]::Round($relative,2); HacimKati=[math]::Round($vol,2); Hacim24sUSDT=(Num $ticker.quoteVolume); GucIzleri=$strengthHistory; Onceki6sAralik=[math]::Round($range,2); Esik=$high; MumKapanis=$cutoff}
         } catch { $errors += "$($ticker.symbol): $($_.Exception.Message)" }
         Start-Sleep -Milliseconds 120
     }
     if ($rows.Count -eq 0) { throw ('Tum veri istekleri basarisiz: ' + ($errors -join '; ')) }
+    SetRelativeWatchSignals $rows $watchlist.Count
     $candidates = @($rows | Where-Object { $_.Sinyal -ne 'YOK' } | Sort-Object HacimKati -Descending)
     EnrichFutures $rows ($cutoff + 1)
     $record = [ordered]@{Zaman=$stamp; Durum=$(if($errors.Count){'KISMI'}else{'TAM'}); Hedef=$universe.Count; Basarili=$rows.Count; BTCDegisim4s=$btc4; Adaylar=$candidates; Sonuclar=$rows; Hatalar=$errors}
